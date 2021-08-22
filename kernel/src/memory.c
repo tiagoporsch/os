@@ -85,7 +85,45 @@ static inline void invlpg(void* addr) {
     asm volatile ("invlpg (%0)" : : "b" (addr) : "memory");
 }
 
-void memory_map(u64 page_map, u64 paddr, void* vaddr, u64 count) {
+static bool memory_virt_used(u64 page_map, void* vaddr, u64 size) {
+	struct page_table* p4 = (void*) MEM_AT_PHYS(page_map);
+	for (; size--; vaddr += PAGE_SIZE) {
+		struct page_table_entry* p4e = &p4->entry[P4_INDEX(vaddr)];
+		if (!p4e->present)
+			continue;
+		struct page_table* p3 = (void*) MEM_AT_PHYS(p4e->frame * PAGE_SIZE);
+		struct page_table_entry* p3e = &p3->entry[P3_INDEX(vaddr)];
+		if (!p3e->present)
+			continue;
+		if (p3e->huge)
+			return true;
+		struct page_table* p2 = (void*) MEM_AT_PHYS(p3e->frame * PAGE_SIZE);
+		struct page_table_entry* p2e = &p2->entry[P2_INDEX(vaddr)];
+		if (!p2e->present)
+			continue;
+		if (p2e->huge)
+			return true;
+		struct page_table* p1 = (void*) MEM_AT_PHYS(p2e->frame * PAGE_SIZE);
+		struct page_table_entry* p1e = &p1->entry[P1_INDEX(vaddr)];
+		if (p1e->present)
+			return true;
+	}
+	return false;
+}
+
+static void* memory_virt_alloc(u64 page_map, u64 size) {
+	u64 vaddr = page_map == kernel_page_map ? MEM_AT_KERN(0) : 0x1000;
+	u64 limit = page_map == kernel_page_map ? MEM_AT_PHYS(0) : MEM_AT_KERN(0);
+	for (; vaddr < limit; vaddr += PAGE_SIZE)
+		if (!memory_virt_used(page_map, (void*) vaddr, size))
+			return (void*) vaddr;
+	panic("memory_virt_alloc: ran out of virtual memory!?\n");
+}
+
+void* memory_map(u64 page_map, u64 paddr, void* vaddr, u64 count) {
+	if (vaddr == NULL)
+		vaddr = memory_virt_alloc(page_map, count);
+	void* addr = vaddr;
 	assert(P0_INDEX(paddr) == 0);
 	assert(P0_INDEX(vaddr) == 0);
 	struct page_table* p4 = (struct page_table*) MEM_AT_PHYS(page_map);
@@ -132,6 +170,7 @@ void memory_map(u64 page_map, u64 paddr, void* vaddr, u64 count) {
 		vaddr += PAGE_SIZE;
 		paddr += PAGE_SIZE;
 	}
+	return addr;
 }
 
 static bool table_is_empty(struct page_table* table) {
@@ -201,41 +240,6 @@ void memory_unmap(u64 page_map, void* vaddr, u64 page_count) {
 		invlpg(vaddr);
 		vaddr += PAGE_SIZE;
 	}
-}
-
-static bool memory_virt_used(u64 page_map, void* vaddr, u64 size) {
-	struct page_table* p4 = (void*) MEM_AT_PHYS(page_map);
-	for (; size--; vaddr += PAGE_SIZE) {
-		struct page_table_entry* p4e = &p4->entry[P4_INDEX(vaddr)];
-		if (!p4e->present)
-			continue;
-		struct page_table* p3 = (void*) MEM_AT_PHYS(p4e->frame * PAGE_SIZE);
-		struct page_table_entry* p3e = &p3->entry[P3_INDEX(vaddr)];
-		if (!p3e->present)
-			continue;
-		if (p3e->huge)
-			return true;
-		struct page_table* p2 = (void*) MEM_AT_PHYS(p3e->frame * PAGE_SIZE);
-		struct page_table_entry* p2e = &p2->entry[P2_INDEX(vaddr)];
-		if (!p2e->present)
-			continue;
-		if (p2e->huge)
-			return true;
-		struct page_table* p1 = (void*) MEM_AT_PHYS(p2e->frame * PAGE_SIZE);
-		struct page_table_entry* p1e = &p1->entry[P1_INDEX(vaddr)];
-		if (p1e->present)
-			return true;
-	}
-	return false;
-}
-
-static void* memory_virt_alloc(u64 page_map, u64 size) {
-	u64 vaddr = page_map == kernel_page_map ? MEM_AT_KERN(0) : 0x1000;
-	u64 limit = page_map == kernel_page_map ? MEM_AT_PHYS(0) : MEM_AT_KERN(0);
-	for (; vaddr < limit; vaddr += PAGE_SIZE)
-		if (!memory_virt_used(page_map, (void*) vaddr, size))
-			return (void*) vaddr;
-	panic("memory_virt_alloc: ran out of virtual memory!?\n");
 }
 
 void* memory_alloc(u64 page_map, void* vaddr, u64 size) {

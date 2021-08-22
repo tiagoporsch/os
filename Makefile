@@ -42,7 +42,7 @@ build/hdd.img: build/boot/boot.bin build/kernel/kernel.elf $(PROGRAMS)
 
 run: all
 	@echo "QEMU build/hdd.img"
-	@qemu-system-x86_64 -drive format=raw,file=build/hdd.img
+	@qemu-system-x86_64 -vga std -drive format=raw,file=build/hdd.img
 
 debug: all
 	@echo "QEMU build/hdd.img"

@@ -26,7 +26,7 @@ void isr_init() {
 	out8(0xA1, 0x00);
 
 	// Mask all interrupts except keyboard
-	out8(0x21, 0xFF & ~2);
+	out8(0x21, 0xFF & ~3);
 
 	// Enable interrupts
 	asm volatile ("sti");

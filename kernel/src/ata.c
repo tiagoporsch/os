@@ -5,6 +5,7 @@
 
 #include "cpu.h"
 #include "panic.h"
+#include "pci.h"
 
 #define ATA_SR_BSY		0x80
 #define ATA_SR_DRDY		0x40
@@ -99,6 +100,9 @@ static void ata_device_detect(struct ata_device* device) {
 }
 
 void ata_init() {
+	u32 device = pci_scan(0x0101);
+	if (device == (u32) -1)
+		panic("no IDE controller");
 	for (int i = 0; i < 4; i++)
 		ata_device_detect(&ata_devices[i]);
 }

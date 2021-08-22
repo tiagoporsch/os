@@ -32,8 +32,9 @@ struct page_table {
 
 void memory_init();
 
-void memory_map(u64, u64, void*, u64);
+void* memory_map(u64, u64, void*, u64);
 void memory_unmap(u64, void*, u64);
+
 void* memory_share(u64, u64, void*, u64);
 void* memory_alloc(u64, void*, u64);
 void memory_free(u64, void*, u64);
